@@ -44,16 +44,30 @@ function applyHighlights(node) {
   for (const c of node.children || []) applyHighlights(c);
 }
 
+// Creates plain-object copies of every tree node, stripping any internal
+// ECharts properties (_edge, _index, etc.) that were grafted onto our
+// original objects during the first render. ECharts crashes on setOption
+// when it receives already-augmented objects in merge/notMerge modes alike.
+function cloneForRender(node) {
+  const clone = {
+    name:  node.name,
+    value: node.value,
+    depth: node.depth,
+  };
+  if (node.itemStyle) clone.itemStyle = { ...node.itemStyle };
+  if (node.children && node.children.length > 0)
+    clone.children = node.children.map(cloneForRender);
+  return clone;
+}
+
 function refreshHighlights() {
   if (!chart || !treeData || !baseOption) return;
-  applyHighlights(treeData);
-  // Use notMerge:true so ECharts rebuilds the series from scratch
-  // instead of trying to diff/merge mutated node objects against its
-  // stale internal tree state (which causes the _edge null crash).
-  // initialTreeDepth:2 is preserved in baseOption so the view resets
-  // to the top two levels — intentional, so the highlighted path is
-  // visible without the user having to scroll.
-  chart.setOption({ ...baseOption, series: [{ ...baseOption.series[0], data: [treeData] }] }, { notMerge: true });
+  applyHighlights(treeData);                   // update styles on our master copy
+  const freshTree = cloneForRender(treeData);  // strip ECharts-internal mutations
+  chart.setOption(
+    { ...baseOption, series: [{ ...baseOption.series[0], data: [freshTree] }] },
+    { notMerge: true }
+  );
 }
 
 // ── People list ──────────────────────────────────────────────────
