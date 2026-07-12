@@ -15,7 +15,7 @@ const people = require('./people');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const OUTPUT_DIR = path.join(__dirname, '..', 'output');
+const OUTPUT_DIR = path.join(__dirname, 'data');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
@@ -128,13 +128,16 @@ ${
     ? `\nIntelligence thread (the specific operational context this contact has been mapped to — weave these themes into the email naturally):\n${threadContext}\n`
     : ''
 }
-Write a professional, concise cold outreach email to ${person.name}, ${person.title} at ${person.company}.
+Write a professional, concise cold outreach email to ${person.name}, ${person.title} at ${person.company}.${
+  person.focus ? `\nThis person is known for: ${person.focus}` : ''
+}
 
 Requirements:
 - Subject line on the first line, prefixed with "Subject: "
 - Blank line after subject
 - Body under 160 words
-- Tie the value proposition tightly to their industry and role using the intelligence thread as context
+- Tie the value proposition tightly to their specific research domain and the intelligence thread themes
+- Show genuine familiarity with their work — reference it by name or concept
 - Executive-level tone, no buzzwords
 - The final sentence of the body must say that a private one-time access link is attached below — do NOT write any URL, just state it is attached
 - Sign off with exactly: haiveminds
