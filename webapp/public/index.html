@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ARCHSAGE BLACK SITE</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- TOP BAR -->
+  <header>
+    <span class="brand-archsage">ARCHSAGE</span>
+    <span class="brand-blacksite">BLACK SITE</span>
+    <span class="brand-sub" id="node-count"></span>
+  </header>
+
+  <!-- THREE PANELS -->
+  <div class="panels">
+
+    <!-- LEFT: People list -->
+    <aside id="left-panel">
+      <div class="panel-header">TARGETS &mdash; <span id="people-count"></span></div>
+      <div id="people-list"></div>
+    </aside>
+
+    <!-- CENTER: Hierarchy tree -->
+    <main id="center-panel">
+      <div id="tree-tip">Drag to pan &middot; Scroll to zoom &middot; Click node to expand &middot; Hover for message</div>
+      <div id="tree-container"></div>
+    </main>
+
+    <!-- RIGHT: Message trail + generated email -->
+    <aside id="right-panel">
+      <div class="panel-header">INTELLIGENCE THREAD</div>
+      <div id="right-content">
+        <div class="right-placeholder">Select a target to map their intelligence thread and generate outreach.</div>
+      </div>
+    </aside>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+

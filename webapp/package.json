@@ -1,0 +1,14 @@
+{
+  "name": "haiveminds-hierarchy-viewer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Node.js app that renders the full haiveminds message hierarchy as an interactive top-to-bottom box tree.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}
