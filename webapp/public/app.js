@@ -1,20 +1,24 @@
 // ── Constants ────────────────────────────────────────────────────
 const LEVEL_COLORS = ['#f43f5e', '#fb923c', '#facc15', '#4ade80', '#38bdf8', '#a78bfa'];
 const LEVEL_LABELS = ['ROOT', 'L1', 'L2', 'L3', 'L4', 'L5'];
-const DIM_COLOR    = '#111823';
 
 // ── State ────────────────────────────────────────────────────────
-let chart       = null;
-let treeData    = null;
-let ancestryIds = new Set();
-let personNodes = []; // pre-fetched nodeId per person index
+let chart           = null;
+let treeData        = null;
+let baseOption      = null;  // full initial chart option, reused for highlight rebuilds
+let ancestryIds     = new Set();
+let personNodes     = []; // pre-fetched nodeId per person index
+let activePerson    = null;
+let activePersonIdx = null;
 
 // ── Tree highlight ───────────────────────────────────────────────
 function applyHighlights(node) {
-  const hit   = ancestryIds.has(node.value);
-  const d     = node.depth || 0;
-  const hasSelection = ancestryIds.size > 0;
+  const hit = ancestryIds.has(node.value);
+  const d   = node.depth || 0;
 
+  // Only mutate itemStyle — never symbolSize (changing symbolSize
+  // forces ECharts to redo layout and corrupts its internal _edge
+  // references, causing a null-property crash on the next setOption).
   if (hit) {
     node.itemStyle = {
       color:       LEVEL_COLORS[d % 6],
@@ -24,25 +28,32 @@ function applyHighlights(node) {
       shadowColor: LEVEL_COLORS[d % 6],
       opacity:     1,
     };
-    node.symbolSize = [14, 10];
   } else {
+    // Always keep non-highlighted nodes fully visible at their level color.
+    // Only the glow + white border on ancestry nodes makes them stand out —
+    // never dim or hide the rest of the tree.
     node.itemStyle = {
-      color:       hasSelection ? DIM_COLOR : LEVEL_COLORS[d % 6],
+      color:       LEVEL_COLORS[d % 6],
       borderColor: '#0b0f14',
       borderWidth: 0,
       shadowBlur:  0,
       shadowColor: 'transparent',
-      opacity:     hasSelection ? 0.25 : 1,
+      opacity:     1,
     };
-    node.symbolSize = [6, 6];
   }
   for (const c of node.children || []) applyHighlights(c);
 }
 
 function refreshHighlights() {
-  if (!chart || !treeData) return;
+  if (!chart || !treeData || !baseOption) return;
   applyHighlights(treeData);
-  chart.setOption({ series: [{ data: [treeData] }] }, false);
+  // Use notMerge:true so ECharts rebuilds the series from scratch
+  // instead of trying to diff/merge mutated node objects against its
+  // stale internal tree state (which causes the _edge null crash).
+  // initialTreeDepth:2 is preserved in baseOption so the view resets
+  // to the top two levels — intentional, so the highlighted path is
+  // visible without the user having to scroll.
+  chart.setOption({ ...baseOption, series: [{ ...baseOption.series[0], data: [treeData] }] }, { notMerge: true });
 }
 
 // ── People list ──────────────────────────────────────────────────
@@ -67,6 +78,8 @@ function renderPeople(people) {
 
 // ── Message trail ────────────────────────────────────────────────
 async function onPersonSelect(person, idx) {
+  activePerson    = person;
+  activePersonIdx = idx;
   const panel = document.getElementById('right-content');
   panel.innerHTML = `<div class="loading-msg"><div class="spinner"></div>Mapping intelligence thread&hellip;</div>`;
 
@@ -119,6 +132,30 @@ function buildTrailHTML(person, chain) {
   `;
 }
 
+// ── Switch messaging path ───────────────────────────────────────
+async function switchToNode(nodeId) {
+  if (chart) chart.dispatchAction({ type: 'hideTip' });
+  if (!activePerson) {
+    // Flash a message in the right panel if no person is selected yet
+    const panel = document.getElementById('right-content');
+    const saved = panel.innerHTML;
+    panel.innerHTML = '<div class="email-error" style="padding:16px">Select a contact on the left first, then choose a path.</div>';
+    setTimeout(() => { panel.innerHTML = saved; }, 2500);
+    return;
+  }
+  // Override this person’s assigned node and re-run the full selection flow
+  personNodes[activePersonIdx] = nodeId;
+  await onPersonSelect(activePerson, activePersonIdx);
+}
+
+// Global handler for the “USE THIS PATH” button rendered inside ECharts tooltips
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-change-node]');
+  if (!btn) return;
+  const nodeId = parseInt(btn.dataset.changeNode, 10);
+  switchToNode(nodeId);
+});
+
 // ── Email generation ─────────────────────────────────────────────
 async function generateEmail(person, ancestry) {
   const emailDiv = document.getElementById('email-body-content');
@@ -160,15 +197,33 @@ function initTree(tree, total) {
 
   chart = echarts.init(document.getElementById('tree-container'), null, { renderer: 'canvas' });
 
-  chart.setOption({
+  baseOption = {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'item',
       triggerOn: 'mousemove',
-      formatter: p =>
-        `<span style="font-size:10px;color:#6b7280;letter-spacing:.06em">` +
-        `ID ${p.data.value} &nbsp;&bull;&nbsp; LEVEL ${p.data.depth}</span><br/>` +
-        `<span style="font-size:12px;color:#f9fafb;line-height:1.5">${p.name}</span>`,
+      enterable: true,          // lets the pointer enter the tooltip so the button is clickable
+      hideDelay: 300,
+      formatter: p => {
+        if (!p.data) return '';
+        const d = p.data;
+        const isLeaf = !d.children || d.children.length === 0;
+        const pathBtn = isLeaf
+          ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #1f2937">
+               <button data-change-node="${d.value}"
+                 style="background:#0f2535;border:1px solid #38bdf8;color:#38bdf8;
+                        padding:5px 12px;border-radius:4px;font-size:10px;font-weight:700;
+                        letter-spacing:.1em;cursor:pointer;font-family:inherit;
+                        transition:background .15s">
+                 &#8677; USE THIS PATH
+               </button>
+             </div>`
+          : '';
+        return `<span style="font-size:10px;color:#6b7280;letter-spacing:.06em">` +
+               `ID ${d.value} &nbsp;&bull;&nbsp; LEVEL ${d.depth}</span><br/>` +
+               `<span style="font-size:12px;color:#f9fafb;line-height:1.5">${d.name}</span>` +
+               pathBtn;
+      },
       backgroundColor: '#0d1117',
       borderColor: '#1c2333',
       padding: [10, 14],
@@ -195,8 +250,9 @@ function initTree(tree, total) {
       roam: true,
       zoom: 1,
     }],
-  });
+  };
 
+  chart.setOption(baseOption);
   window.addEventListener('resize', () => chart.resize());
 }
 
