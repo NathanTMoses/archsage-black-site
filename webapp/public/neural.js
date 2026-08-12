@@ -2,7 +2,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // ── TRACT GROUPS ──────────────────────────────────────────────────────────────
 const GROUPS = {
@@ -301,7 +300,7 @@ function buildTracts(center, size) {
     const spreadW = tract.spread * minHalf;
     const col     = new THREE.Color(GROUPS[tract.group].color);
     const curves  = [];
-    const geos    = [];
+    const fibers  = []; // { mesh, mat } per fiber
 
     for (let i = 0; i < tract.fiberCount; i++) {
       // Perpendicular scatter vector (constant per fiber, varies smoothly)
@@ -334,43 +333,33 @@ function buildTracts(center, size) {
       const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.5);
       curves.push(curve);
 
-      // Slight color variation per fiber for depth/richness
+      // Slight hue/lightness variation per fiber
       const fCol = col.clone().offsetHSL(
         (Math.random() - 0.5) * 0.05,
         (Math.random() - 0.5) * 0.12,
         (Math.random() - 0.5) * 0.10,
       );
-      const geo = new THREE.TubeGeometry(curve, 10, 0.0038, 3, false);
-      // Tag geometry verts with color (mergeGeometries needs uniform attributes — set via material)
-      geo.userData.color = fCol;
-      geos.push(geo);
+      const mat  = new THREE.MeshBasicMaterial({ color: fCol, transparent: true, opacity: 0.72 });
+      const mesh = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, 10, 0.0038, 3, false), mat
+      );
+      mesh.userData.tractId = tract.id;
+      mesh.renderOrder = 2;
+      scene.add(mesh);
+      fibers.push({ mesh, mat });
     }
 
-    // Merge all fiber geometries into a single draw call
-    const merged = mergeGeometries(geos, false);
-    geos.forEach(g => g.dispose());
-
-    const mat = new THREE.MeshBasicMaterial({
-      color: col,
-      transparent: true,
-      opacity: 0.72,
-    });
-    const mesh = new THREE.Mesh(merged, mat);
-    mesh.userData.tractId = tract.id;
-    mesh.renderOrder = 2;
-    scene.add(mesh);
-
-    // Invisible hit sphere at tract geometric center for fast picking
+    // Invisible hit sphere at tract midpoint — used for raycasting instead of fiber meshes
     const midWorld = worldSpine.reduce((a, p) => a.add(p), new THREE.Vector3()).divideScalar(worldSpine.length);
     const hitSphere = new THREE.Mesh(
-      new THREE.SphereGeometry(0.14, 5, 5),
+      new THREE.SphereGeometry(0.18, 5, 5),
       new THREE.MeshBasicMaterial({ visible: false })
     );
     hitSphere.position.copy(midWorld);
     hitSphere.userData.tractId = tract.id;
     scene.add(hitSphere);
 
-    tractObjs[tract.id] = { tract, mesh, mat, curves, hitSphere, midWorld };
+    tractObjs[tract.id] = { tract, fibers, curves, hitSphere, midWorld };
   });
 }
 
@@ -421,9 +410,11 @@ function setGroup(group) {
 
   Object.values(tractObjs).forEach(to => {
     const show = !group || to.tract.group === group;
-    to.mesh.visible       = show;
-    to.hitSphere.visible  = false;
-    if (show) { to.mat.opacity = 0.72; to.mat.color.set(GROUPS[to.tract.group].color); }
+    to.fibers.forEach(f => {
+      f.mesh.visible  = show;
+      if (show) { f.mat.opacity = 0.72; }
+    });
+    to.hitSphere.visible = show;
   });
 }
 
@@ -474,11 +465,15 @@ function selectTract(id) {
 function applyTractHighlight(activeId) {
   Object.values(tractObjs).forEach(to => {
     const isActive = to.tract.id === activeId;
-    to.mesh.visible      = isActive || !activeGroup || to.tract.group === activeGroup;
-    if (to.mesh.visible) {
-      to.mat.opacity = isActive ? 0.95 : 0.10;
-      to.mat.color.set(isActive ? GROUPS[to.tract.group].color : '#1a2a3a');
-    }
+    const show     = isActive || !activeGroup || to.tract.group === activeGroup;
+    to.fibers.forEach(f => {
+      f.mesh.visible = show;
+      if (show) {
+        f.mat.opacity = isActive ? 0.94 : 0.08;
+        if (!isActive) f.mat.color.set(0x0d1a2e);
+      }
+    });
+    to.hitSphere.visible = show;
   });
 }
 
@@ -525,7 +520,7 @@ function spawnPulse(curve, color) {
 }
 
 function triggerRandomPulse() {
-  const visible = Object.values(tractObjs).filter(to => to.mesh.visible);
+  const visible = Object.values(tractObjs).filter(to => to.fibers[0]?.mesh.visible);
   if (!visible.length) return;
   const to   = visible[Math.floor(Math.random() * visible.length)];
   const curve = to.curves[Math.floor(Math.random() * to.curves.length)];
@@ -555,9 +550,9 @@ function checkHover() {
   _ptrDirty = false;
   raycaster.setFromCamera(pointer, camera);
 
-  // Raycast against actual tract meshes (merged geometry, accurate)
-  const meshes = Object.values(tractObjs).filter(to => to.mesh.visible).map(to => to.mesh);
-  const hits   = raycaster.intersectObjects(meshes, false);
+  // Raycast against invisible hit spheres — fast, one per tract
+  const hitSpheres = Object.values(tractObjs).filter(to => to.hitSphere.visible).map(to => to.hitSphere);
+  const hits       = raycaster.intersectObjects(hitSpheres, false);
 
   if (hits.length) {
     const id = hits[0].object.userData.tractId;
@@ -590,23 +585,24 @@ function animate() {
   controls.update();
   checkHover();
 
-  // Subtle opacity breathing per tract — each group breathes at different rate
+  // Subtle opacity breathing per tract — each group breathes at a different rate
   if (!selectedId) {
     Object.values(tractObjs).forEach(to => {
-      if (!to.mesh.visible) return;
+      if (!to.fibers[0]?.mesh.visible) return;
       const rate  = to.tract.group === 'commissural' ? 0.4 :
                     to.tract.group === 'association'  ? 0.55 :
                     to.tract.group === 'projection'   ? 0.7  :
                     to.tract.group === 'limbic'        ? 0.35 : 0.5;
-      const phase = (to.tract.fiberCount % 7) * 0.9;
-      to.mat.opacity = 0.62 + 0.14 * Math.sin(t * rate + phase);
+      const phase   = (to.tract.fiberCount % 7) * 0.9;
+      const opacity = 0.62 + 0.14 * Math.sin(t * rate + phase);
+      to.fibers.forEach(f => { f.mat.opacity = opacity; });
     });
   }
 
   // Hover highlight
   if (hoveredId && !selectedId) {
     const to = tractObjs[hoveredId];
-    if (to && to.mesh.visible) to.mat.opacity = 0.95;
+    if (to) to.fibers.forEach(f => { if (f.mesh.visible) f.mat.opacity = 0.95; });
   }
 
   // Advance pulses
