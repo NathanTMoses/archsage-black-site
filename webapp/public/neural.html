@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>ARCHSAGE — NEURAL MAPPING</title>
+<title>ARCHSAGE — FULL NEUROANATOMICAL MAP</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -355,19 +355,19 @@ header {
   <span class="brand-archsage">ARCHSAGE</span>
   <span class="brand-blacksite">BLACK SITE</span>
   <span class="nav-sep">/</span>
-  <span class="nav-label">NEURAL MAP</span>
+  <span class="nav-label">FIBER TRACTOGRAPHY</span>
   <div class="header-right">
     <div id="hud-stats">
-      <span>SYNAPSES <span class="hud-val" id="hud-syn">—</span></span>
-      <span>NODES <span class="hud-val" id="hud-nodes">—</span></span>
-      <span>FIRES <span class="hud-val" id="hud-fires">0</span></span>
+      <span>TRACTS <span class="hud-val" id="hud-syn">—</span></span>
+      <span>FIBERS <span class="hud-val" id="hud-nodes">—</span></span>
+      <span>PULSES <span class="hud-val" id="hud-fires">0</span></span>
     </div>
     <a class="back-link" href="/">← MAIN</a>
   </div>
 </header>
 
 <div id="loader">
-  <div class="loader-title">LOADING NEURAL SUBSTRATE</div>
+  <div class="loader-title">GENERATING FIBER TRACTOGRAPHY</div>
   <div class="loader-file">brain human.glb</div>
   <div class="loader-bar-wrap"><div class="loader-bar" id="loader-bar"></div></div>
   <div id="loader-pct">0%</div>
@@ -386,24 +386,24 @@ header {
   <div class="info-body">
     <div class="info-stats">
       <div class="info-stat">
-        <div class="info-stat-label">Frequency</div>
-        <div><span class="info-stat-val" id="info-hz">—</span><span class="info-stat-unit">Hz</span></div>
+        <div class="info-stat-label">Type</div>
+        <div><span class="info-stat-val" id="info-hz" style="font-size:12px;letter-spacing:0.05em">—</span></div>
       </div>
       <div class="info-stat">
-        <div class="info-stat-label">Activity</div>
-        <div><span class="info-stat-val" id="info-act">—</span><span class="info-stat-unit">%</span></div>
+        <div class="info-stat-label">Fibers</div>
+        <div><span class="info-stat-val" id="info-act">—</span></div>
       </div>
     </div>
     <div class="act-bar-wrap"><div class="act-bar" id="act-bar" style="width:0%"></div></div>
     <div class="info-desc" id="info-desc">Select a brain region to inspect its neural profile and connectivity map.</div>
-    <div class="info-conns-header">Connections</div>
+    <div class="info-conns-header">Pathway</div>
     <div id="info-conns"></div>
   </div>
 </div>
 
 <div id="tooltip"></div>
 <div id="region-bar"></div>
-<div id="freq-label">NEURAL FREQ</div>
+<div id="freq-label">FIBER DENSITY</div>
 <canvas id="freq-ring" width="90" height="90"></canvas>
 
 <script type="module" src="neural.js"></script>
