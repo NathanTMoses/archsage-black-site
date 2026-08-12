@@ -79,6 +79,10 @@ const level5Nodes = [];    // all level-5 node ids in insertion order
 console.log(`Indexed ${nodeById.size.toLocaleString()} nodes | ${level5Nodes.length.toLocaleString()} level-5 leaves`);
 
 // ── Routes ────────────────────────────────────────────────────────────────────
+app.get('/neural', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'neural.html'));
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/tree', (_req, res) => res.json({ total: totalNodes, tree: cachedTree }));
